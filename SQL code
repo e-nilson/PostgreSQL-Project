@@ -1,0 +1,96 @@
+-- Business question: Who are the top 10 most loyal customers (based on total sales amount) and what is their email address?
+
+-- Creates detailed payment table and inserts data.
+CREATE TABLE payment_data (
+customer_id smallint,
+amount numeric);
+
+INSERT INTO payment_data
+SELECT customer_id, amount
+FROM payment;
+
+-- Selects all data from table to confirm everything is functioning correctly.
+SELECT * FROM payment_data;
+
+-- Creates detailed customer table and inserts data.
+CREATE TABLE customer_data (
+customer_id int,
+first_name varchar(45),
+last_name varchar (45),
+email varchar(50)
+);
+
+INSERT INTO customer_data
+SELECT customer_id, first_name, last_name, email
+FROM customer;
+
+-- Selects all data from table to confirm everything is functioning correctly.
+SELECT * FROM customer_data;
+
+-- Creates summary table and inserts data.
+CREATE TABLE most_loyal_customer (
+first_name varchar(45),
+last_name varchar (45),
+email varchar(50),
+total_purchase_amount numeric
+);
+
+INSERT INTO most_loyal_customer
+SELECT first_name, last_name, email, SUM(amount) AS total_purchase_amount
+FROM customer_data
+INNER JOIN payment_data USING (customer_id)
+GROUP BY 1,2,3
+ORDER BY 4 DESC
+LIMIT 10;
+
+-- Selects all data from table to confirm everything is functioning correctly.
+SELECT * FROM most_loyal_customer;
+
+-- Creates stored procedure for trigger.
+CREATE OR REPLACE PROCEDURE reload_most_loyal_customer_data()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+TRUNCATE payment_data;
+TRUNCATE customer_data;
+TRUNCATE most_loyal_customer;
+
+INSERT INTO payment_data
+SELECT customer_id, amount
+FROM payment;
+
+INSERT INTO customer_data
+SELECT customer_id, first_name, last_name, email
+FROM customer;
+
+INSERT INTO most_loyal_customer
+SELECT first_name, last_name, email, SUM(amount) AS total_purchase_amount
+FROM customer_data
+INNER JOIN payment_data USING (customer_id)
+GROUP BY 1,2,3
+ORDER BY 4 DESC
+LIMIT 10;
+
+END;$$
+
+-- Creates trigger function.
+CREATE OR REPLACE FUNCTION insert_trigger_function()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+CALL reload_most_loyal_customer_data();
+RETURN NEW;
+END; $$
+
+-- Creates trigger statement.
+CREATE TRIGGER payment_inserted
+AFTER INSERT
+ON payment
+FOR EACH STATEMENT
+EXECUTE PROCEDURE insert_trigger_function();
+
+-- Drops tables.
+DROP TABLE most_loyal_customer;
+DROP TABLE customer_data;
+DROP TABLE payment_data;
